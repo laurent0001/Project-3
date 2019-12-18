@@ -203,6 +203,70 @@ write.table(decostand(OTU.table.spectral, method="range"), "ASV_table_ranged.tsv
 write.table(Env.mat.interpolated.NA, "Metadata_table.tsv",  sep = "\t", row.names = FALSE, col.names = TRUE)
 write.table(scale(Env.mat.interpolated.NA, scale=T, center=T), "Metadata_table_scaled.tsv",  sep = "\t", row.names = FALSE, col.names = TRUE)
 
+# Data subsets for Maxim
+ASV_table_50_50 = OTU.table.spectral[,colSums(OTU.table.spectral==0)/nrow(OTU.table.spectral)==0.5]
+ASV_table_50_50_binary = OTU.table.spectral[,colSums(OTU.table.spectral==0)/nrow(OTU.table.spectral)==0.5]
+ASV_table_50_50_binary[ASV_table_50_50_binary>0]=1
+ASV_table_min_10_observations = OTU.table.spectral[,colSums(OTU.table.spectral>0)>=10]
+
+setwd("C:/Users/laurenfo/Documents/Courses/FYS-STK4155/Project 3")
+write.table(Env.mat.interpolated.NA[,c("Area", "Depth", "Temperature", "Secchi", "O2", "CH4", "pH", "TIC", "SiO2", "KdPAR")], "Input_Metadata_10_variables.tsv",  sep = "\t", row.names = FALSE, col.names = TRUE)
+write.table(OTU.table.spectral, "Input_full_ASV_table.tsv",  sep = "\t", row.names = FALSE, col.names = TRUE)
+write.table(ASV_table_min_10_observations, "Input_ASV_table_min_10_observations.tsv",  sep = "\t", row.names = FALSE, col.names = TRUE)
+write.table(ASV_table_50_50_binary, "Output_ASV_table_50_50_binary.tsv",  sep = "\t", row.names = FALSE, col.names = TRUE)
+write.table(Env.mat.interpolated.NA[,c("Area")], "Output_Metadata_Area.tsv",  sep = "\t", row.names = FALSE, col.names = TRUE)
+write.table(Env.mat.interpolated.NA[,c("Depth")], "Output_Metadata_Depth.tsv",  sep = "\t", row.names = FALSE, col.names = TRUE)
+write.table(Env.mat.interpolated.NA[,c("Temperature")], "Output_Metadata_Temperature.tsv",  sep = "\t", row.names = FALSE, col.names = TRUE)
+write.table(Env.mat.interpolated.NA[,c("Secchi")], "Output_Metadata_Secchi.tsv",  sep = "\t", row.names = FALSE, col.names = TRUE)
+write.table(Env.mat.interpolated.NA[,c("O2")], "Output_Metadata_O2.tsv",  sep = "\t", row.names = FALSE, col.names = TRUE)
+write.table(Env.mat.interpolated.NA[,c("CH4")], "Output_Metadata_CH4.tsv",  sep = "\t", row.names = FALSE, col.names = TRUE)
+write.table(Env.mat.interpolated.NA[,c("pH")], "Output_Metadata_pH.tsv",  sep = "\t", row.names = FALSE, col.names = TRUE)
+write.table(Env.mat.interpolated.NA[,c("TIC")], "Output_Metadata_TIC.tsv",  sep = "\t", row.names = FALSE, col.names = TRUE)
+write.table(Env.mat.interpolated.NA[,c("SiO2")], "Output_Metadata_SiO2.tsv",  sep = "\t", row.names = FALSE, col.names = TRUE)
+write.table(Env.mat.interpolated.NA[,c("KdPAR")], "Output_Metadata_KdPAR.tsv",  sep = "\t", row.names = FALSE, col.names = TRUE)
+
+#Procrustes test to check for significant differences in clustering by XGboost and Random forests
+XGboost.meta = read.table("C:/Users/laurenfo/Documents/Courses/FYS-STK4155/Project 3/Predicted_metadata_XGboost_subset_Maziar.tsv", header=T, check.names=F)
+rownames(XGboost.meta) = rownames.OTU.matching.spectra
+RF.meta = read.table("C:/Users/laurenfo/Documents/Courses/FYS-STK4155/Project 3/Predicted_metadata_RF_100_ASV_Maziar.tsv", 
+					header=T, check.names=F)[,c("Latitude","Longitude","Altitude","Area","Depth","Temperature","Secchi","O2","CH4","pH","TIC","SiO2","KdPAR")]
+rownames(RF.meta) = rownames.OTU.matching.spectra
+Original.meta = Env.mat.interpolated.NA[,c("Latitude","Longitude","Altitude","Area","Depth","Temperature","Secchi","O2","CH4","pH","TIC","SiO2","KdPAR")]
+rownames(Original.meta) = rownames.OTU.matching.spectra
+
+library(vegan)
+XGboost.dist=vegdist(scale(XGboost.meta), method="euclidean")	#Distance matrix for XGboost-predicted data, Q type analysis
+RF.dist=vegdist(scale(RF.meta), method="euclidean")	#Distance matrix for RF-predicted data, Q type analysis
+Original.dist=vegdist(scale(Original.meta), method="euclidean")	#Distance matrix for original metadata, Q type analysis
+
+XGboost.protest=protest(XGboost.dist, Original.dist, scores = "sites", permutations = how(nperm = 999))	#Pairwise comparison of distance matrices for XGboost and original metadata
+RF.protest=protest(RF.dist, Original.dist, scores = "sites", permutations = how(nperm = 999))	#Pairwise comparison of distance matrices for Random Forest and original metadata
+XGboost.RF.protest=protest(XGboost.dist, RF.dist, scores = "sites", permutations = how(nperm = 999))	#Pairwise comparison of distance matrices for XGboost and Random Forest
+
+library(dendextend)
+XGboost.dendro = as.dendrogram(hclust(XGboost.dist, method="average"))
+RF.dendro = as.dendrogram(hclust(RF.dist, method="average"))
+Original.dendro = as.dendrogram(hclust(Original.dist, method="average"))
+dl1 = dendlist(XGboost.dendro, Original.dendro)
+dl2 = dendlist(RF.dendro, Original.dendro)
+dl3 = dendlist(XGboost.dendro, RF.dendro)
+setwd("C:/Users/laurenfo/Documents/Courses/FYS-STK4155/Project 3")
+pdf("Metadata_predictions_tanglegrams.pdf")
+tanglegram(dl1, sort = T, common_subtrees_color_lines = F, highlight_distinct_edges = F, 
+highlight_branches_lwd = F, main_left = "XGboost", main_right = "True data", 
+sub=paste("Procrustes test", "\n", "Correlation:", round(XGboost.protest[[6]], 4), "\n", "Significance:", XGboost.protest[13]),
+common_subtrees_color_branches = FALSE, margin_inner = 7, lwd = 0.5, lab.cex = 0.8, cex_sub=0.8, axes=F)
+tanglegram(dl2, sort = T, common_subtrees_color_lines = F, highlight_distinct_edges = F, 
+highlight_branches_lwd = F, main_left = "Random Forest", main_right = "True data", 
+sub=paste("Procrustes test", "\n", "Correlation:", round(RF.protest[[6]], 4), "\n", "Significance:", RF.protest[13]),
+common_subtrees_color_branches = FALSE, margin_inner = 7, lwd = 0.5, lab.cex = 0.8, cex_sub=0.8, axes=F)
+tanglegram(dl3, sort = T, common_subtrees_color_lines = F, highlight_distinct_edges = F, 
+highlight_branches_lwd = F, main_left = "XGboost", main_right = "Random Forest", 
+sub=paste("Procrustes test", "\n", "Correlation:", round(XGboost.RF.protest[[6]], 4), "\n", "Significance:", XGboost.RF.protest[13]),
+common_subtrees_color_branches = FALSE, margin_inner = 7, lwd = 0.5, lab.cex = 0.8, cex_sub=0.8, axes=F)
+dev.off()
+
+
 # Partial out from ASV table variables uncorrelated with CDOM
 Env.scaled = scale(Env.mat.interpolated.NA, scale=T, center=T)
 
